@@ -1,4 +1,4 @@
-import { County } from './county';
+import { County } from './county.js';
 
 export const Madison: County = {
   name: 'Madison',

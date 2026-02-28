@@ -1,9 +1,9 @@
-import { County } from './county';
+import { County } from './county.js';
 
 export const Bronx: County = {
   name: 'Bronx',
   // NOTE: special: state = 4, county = 0, city = 4.5, special tax = 0.38
-  tax: 4.5,
+  tax: 4.88,
   type: 'Feature',
   geometry: {
     coordinates: [

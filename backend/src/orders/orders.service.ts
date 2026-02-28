@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Order } from './order.entity';
+import { Order } from './order.entity.js';
 import { Repository } from 'typeorm';
 import { Readable } from 'stream';
 import csv from 'csv-parser';
-import { CsvRow } from 'src/csvrow';
-import { County } from 'src/ny_counties/county';
-import { counties } from 'src/ny_counties/counties';
+import { CsvRow } from '../csvrow.js';
+import { counties } from '../ny_counties/counties.js';
 import * as turf from '@turf/turf';
 import { point, polygon, multiPolygon } from '@turf/turf';
+import { DeleteResult } from 'typeorm/browser';
+import { OrderDto } from './orderDto.js';
 
 @Injectable()
 export class OrdersService {
@@ -44,8 +45,38 @@ export class OrdersService {
     });
   }
 
-  async getAll(): Promise<Order[]> {
-    return this.orderRepository.find();
+  async getAll(): Promise<OrderDto[]> {
+    const orders = await this.orderRepository.find();
+    return orders.map((order) => {
+      const compositeTaxRate = this.calculate_taxes(
+        order.longitude,
+        order.latitude,
+      );
+      const taxAmount = (order.subtotal * compositeTaxRate) / 100;
+      const totalAmount = order.subtotal + taxAmount;
+      const jurisdiction = this.get_juristiction(
+        order.longitude,
+        order.latitude,
+      );
+
+      const dto: OrderDto = {
+        id: order.id,
+        latitude: order.latitude,
+        longitude: order.longitude,
+        timestamp: order.timestamp,
+        subtotal: order.subtotal,
+        composite_tax_rate: compositeTaxRate,
+        tax_amount: taxAmount,
+        total_amount: totalAmount,
+        jurisdiction: jurisdiction,
+      };
+
+      return dto;
+    });
+  }
+
+  async deleteAll(): Promise<DeleteResult> {
+    return this.orderRepository.deleteAll();
   }
 
   async create(data: Partial<Order>): Promise<Order> {
@@ -53,34 +84,43 @@ export class OrdersService {
     return this.orderRepository.save(order);
   }
 
-  get_counties(): County {
-    // let res = '';
-    // counties.forEach((county) => {
-    //   res += county.name + '\n';
-    // });
-    return counties[0];
-  }
-
-  calculate_taxes(x: number, y: number): string {
-    // 1. Get point in which county is our tax
-    // Calculate 4% state tax (for whole NY) plus county tax
+  get_juristiction(x: number, y: number): string {
     const pt = point([x, y]);
 
-    counties.forEach((county) => {
+    for (const county of counties) {
       if (county.geometry.type === 'Polygon') {
         const poly = polygon(county.geometry.coordinates);
-        const isInCounty = turf.booleanPointInPolygon(pt, poly);
-        if (isInCounty) return county.name;
-        // use poly ...
+        if (turf.booleanPointInPolygon(pt, poly)) {
+          return county.name;
+        }
       } else if (county.geometry.type === 'MultiPolygon') {
         const multi = multiPolygon(county.geometry.coordinates);
-        const isInCounty = turf.booleanPointInPolygon(pt, multi);
-        if (isInCounty) return county.name;
-        // use multi ...
+        if (turf.booleanPointInPolygon(pt, multi)) {
+          return county.name;
+        }
       }
-    });
-    // let res = turf.booleanPointInPolygon(point, polygon);
-    // return res;
+    }
+
     return 'Not Found';
+  }
+
+  calculate_taxes(x: number, y: number): number {
+    const pt = point([x, y]);
+
+    for (const county of counties) {
+      if (county.geometry.type === 'Polygon') {
+        const poly = polygon(county.geometry.coordinates);
+        if (turf.booleanPointInPolygon(pt, poly)) {
+          return 4 + county.tax;
+        }
+      } else if (county.geometry.type === 'MultiPolygon') {
+        const multi = multiPolygon(county.geometry.coordinates);
+        if (turf.booleanPointInPolygon(pt, multi)) {
+          return 4 + county.tax;
+        }
+      }
+    }
+
+    return 0;
   }
 }

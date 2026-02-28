@@ -1,6 +1,6 @@
 export class OrderDto {
   id: number;
-  latitute: number;
+  latitude: number;
   longitude: number;
   timestamp: string;
   subtotal: number;

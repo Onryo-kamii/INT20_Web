@@ -2,16 +2,18 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
-  Param,
+  ParseFloatPipe,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import multer from 'multer';
-import { OrdersService } from './orders.service';
-import { Order } from './order.entity';
+import { OrdersService } from './orders.service.js';
+import { Order } from './order.entity.js';
 
 @Controller('orders')
 export class OrdersController {
@@ -23,14 +25,11 @@ export class OrdersController {
     return JSON.stringify(orders);
   }
 
-  @Get('counties')
-  getAllCounties() {
-    const counties = this.orderService.get_counties();
-    return counties;
-  }
-
   @Get('taxes')
-  calculateTaxes(@Param() x: number, @Param() y: number) {
+  calculateTaxes(
+    @Query('x', ParseFloatPipe) x: number,
+    @Query('y', ParseFloatPipe) y: number,
+  ) {
     const taxes = this.orderService.calculate_taxes(x, y);
     return taxes;
   }
@@ -55,5 +54,11 @@ export class OrdersController {
 
     await this.orderService.processCsvBuffer(file.buffer);
     return 'Imports';
+  }
+
+  @Delete()
+  async deleteOrders() {
+    await this.orderService.deleteAll();
+    return;
   }
 }
